@@ -29,7 +29,7 @@ transcript_list = all_transcript.index.tolist()
 num_transcript=len(transcript_list)
 num_transcript
 
-# A TABLE FOR ALL GENES, AS YOU SUGGESTED
+# A TABLE FOR ALL GENES
 all_gene = geneset.query("type == 'gene'")
 # A TABLE FOR ALL EXON
 all_exon = geneset.query("type == 'exon'")
@@ -52,7 +52,7 @@ for j in range(10):
     if (transcript_index>=num_transcript):
          continue
     print(transcript_list[transcript_index])
-    # GET TRANSCRIPT INFO FROM geneset, BORING
+    # GET TRANSCRIPT INFO FROM geneset
     output_df.loc[j, 'ID'] = transcript_list[transcript_index]
     output_df.loc[j, 'contig'] = all_transcript['contig'][transcript_index]
     output_df.loc[j, 'transcript_start'] = all_transcript['start'][transcript_index]
