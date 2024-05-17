@@ -1,0 +1,2 @@
+- All supplementary information, relating to source datasets and results tables (labelled S(x) in the main texy) are available from the 'Supplementary Information' file above.
+- Python 3.9 High-Performance System Computation, relating to sourcing transcript-level data, mutation-level data and converted to gene-level data can be accessed via 'HPC Bash Script' file above.
