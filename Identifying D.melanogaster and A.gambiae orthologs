@@ -1,0 +1,27 @@
+#install.packages("rbioapi")
+library(rbioapi)
+
+#rba_panther_info(what = "organisms") #7227 fruit fly ##7165 mosquito
+ID_unique<-read.csv("~/Documents/Project/ID_short.csv")
+
+######### correctly
+
+correct_orthologs_df <- data.frame()
+no_orth_really <- c()
+for (i in 1:13057){
+  print(i)
+  orthologs <- rba_panther_ortholog(ID_unique$IDs[i],7165,target_organisms = 7227)
+  if (length(orthologs) == 7){
+    print("7")
+    correct_orthologs_df <- rbind(correct_orthologs_df, orthologs)
+  } else {
+    print("No")
+    no_orth_really <- c(no_orth_really, ID_unique$IDs[i])
+    no_orth_log <- orthologs
+  }
+
+  if (i %% 500 == 0) {
+    print('Saved ../data/correct_ortho.csv')
+    write.csv(correct_orthologs_df, '../data/correct_ortho.csv')
+  }
+}
