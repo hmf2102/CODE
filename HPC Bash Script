@@ -1,0 +1,126 @@
+# READ SYSTEM'S PBS_ARRAY_INDEX
+import sys
+index_2 = int(sys.argv[1])
+#index_2 = 1
+print(index_2)
+
+# IMPORT PACKAGES
+import pandas as pd
+import numpy as np
+import malariagen_data
+# CONNECT
+ag3 = malariagen_data.Ag3()
+ag3
+
+# FIND ALL sample_sets, 69 OF THEM, STORE THEIR NAMES AS A LIST
+sample_sets = ag3.sample_sets()
+sample_sets_list=list(sample_sets["sample_set"])
+len(sample_sets_list)
+
+# GENESET
+geneset = ag3.genome_features().set_index('ID')
+# GET A TABLE FOR ALL TRANSCRIPTS
+all_transcript = geneset.query("type == 'mRNA'")
+all_transcript
+
+# PUT TRANSCRIPT NAMES INTO A LIST
+transcript_list = all_transcript.index.tolist()
+# TOTAL NUMBER OF TRANSCRIPT, 14979
+num_transcript=len(transcript_list)
+num_transcript
+
+# A TABLE FOR ALL GENES, AS YOU SUGGESTED
+all_gene = geneset.query("type == 'gene'")
+# A TABLE FOR ALL EXON
+all_exon = geneset.query("type == 'exon'")
+
+# DATAFRAME FOR OUTPUT
+output_df=pd.DataFrame(np.nan, index=range(0, 10), columns=['ID', 'contig', 'transcript_start', 'transcript_end', 'description', 
+                                                    'Parent', 'gene_start', 'gene_end', 
+                                                    'exon_start', 'exon_end', 'exon_length', 
+                                                    'potential_stop_gained_mut', 
+                                                    'gam_unique_stop_gained_seen', 'gam_stop_gained_count', 
+                                                    'gam_total_nobs', 'gam_max_af_mut', 'gam_max_af_mut_label', 
+                                                    'col_unique_stop_gained_seen', 'col_stop_gained_count', 
+                                                    'col_total_nobs', 'col_max_af_mut', 'col_max_af_mut_label'])
+
+# FOR EACH TRANSCRIPT
+for j in range(10):
+    transcript_index = (index_2-1)*10 + j
+    print(j)
+    # IF transcript_index IS OUT OF BOUND WE MOVE ON (NO CALCULATION)
+    if (transcript_index>=num_transcript):
+         continue
+    print(transcript_list[transcript_index])
+    # GET TRANSCRIPT INFO FROM geneset, BORING
+    output_df.loc[j, 'ID'] = transcript_list[transcript_index]
+    output_df.loc[j, 'contig'] = all_transcript['contig'][transcript_index]
+    output_df.loc[j, 'transcript_start'] = all_transcript['start'][transcript_index]
+    output_df.loc[j, 'transcript_end'] = all_transcript['end'][transcript_index]
+    output_df.loc[j, 'Parent'] = all_transcript['Parent'][transcript_index]
+    output_df.loc[j, 'description'] = all_gene[all_gene.index==all_transcript['Parent'][transcript_index]]["description"][0]
+    # GENE START AND STOP
+    output_df.loc[j, 'gene_start'] = all_gene[all_gene.index==all_transcript['Parent'][transcript_index]]["start"][0]
+    output_df.loc[j, 'gene_end'] = all_gene[all_gene.index==all_transcript['Parent'][transcript_index]]["end"][0]
+    # EXON LENGTH IN BASE PAIRS
+    exon = all_exon[all_exon["Parent"]==transcript_list[transcript_index]]
+    output_df.loc[j, 'exon_start'] = exon["start"].min()
+    output_df.loc[j, 'exon_end'] = exon["end"].max()
+    output_df.loc[j, 'exon_length'] = (exon["end"]-exon["start"]).sum()
+    # CALCULATE ALLELE FREQ, BOTH SPECIES TOGETHER. THERE EXIST TRANSCRIPTS WITH NO READS, HENCE USE try
+    snp_af_df = pd.DataFrame()
+    try:
+         snp_af_df = ag3.snp_allele_frequencies(transcript=transcript_list[transcript_index],
+                                            sample_sets=sample_sets_list, cohorts='admin1_year',
+                                            site_mask='gamb_colu', min_cohort_size=1,
+                                            include_counts=True, drop_invariant=False)
+    except: 
+         print("This transcript has no sites. ")
+    # IF snp_af_df IS EMPTY THEN WE MOVE ONTO THE NEXT TRANSCRIPT
+    if (snp_af_df.empty):
+         continue
+    # PICK THOSE CONCERNING STOP_GAINED, AND THE NUMBER OF ROWS WILL BE THE POTENTIAL STOP_GAINED
+    query_df = snp_af_df.query("effect=='STOP_GAINED'")
+    output_df.loc[j, 'potential_stop_gained_mut'] = query_df.shape[0]
+    # IF NO POTENTIAL STOP_GAINED WE MOVE ONTO THE NEXT TRANSCRIPT
+    if (query_df.empty):
+         continue
+    # gambiae
+    gam_query_df=query_df.filter(like='_gamb_')
+    # EXTRACT gam COUNT, THEN SUM ACROSS ALL COHORTS (ONE NUMBER PER MUTATION)
+    gam_count_query_df=gam_query_df.filter(like='count_')
+    gam_count_per_mut=gam_count_query_df.sum(axis=1)
+    # THOSE MUTATION WITH AT LEAST ONE COUNT
+    output_df.loc[j, 'gam_unique_stop_gained_seen']=(gam_count_per_mut>0).sum()
+    # TOTAL COUNTS
+    output_df.loc[j, 'gam_stop_gained_count']=gam_count_per_mut.sum()
+    # EXTRACT gam NUMBER OF OBS, THEM SUM ACROSS ALL COHORTS
+    gam_nobs_query_df=gam_query_df.filter(like='nobs_')
+    gam_nobs_per_mut=gam_nobs_query_df.sum(axis=1)
+    output_df.loc[j, 'gam_total_nobs']=gam_nobs_per_mut.sum()
+    # FREQUENCY PER MUT, count/nobs
+    gam_freq_per_mut=gam_count_per_mut/gam_nobs_per_mut
+    output_df.loc[j, 'gam_max_af_mut']=gam_freq_per_mut.max()
+    output_df.loc[j, 'gam_max_af_mut_label']=query_df['label'][np.argmax(gam_count_per_mut)]
+    # DO THE SAME FOR coluzzii
+    col_query_df=query_df.filter(like='_colu')
+    col_count_query_df=col_query_df.filter(like='count_')
+    col_count_per_mut=col_count_query_df.sum(axis=1)
+    output_df.loc[j, 'col_unique_stop_gained_seen']=(col_count_per_mut>0).sum()
+    output_df.loc[j, 'col_stop_gained_count']=col_count_per_mut.sum()
+    col_nobs_query_df=col_query_df.filter(like='nobs_')
+    col_nobs_per_mut=col_nobs_query_df.sum(axis=1)
+    output_df.loc[j, 'col_total_nobs']=col_nobs_per_mut.sum()
+    # FREQUENCY PER MUT, count/nobs
+    col_freq_per_mut=col_count_per_mut/col_nobs_per_mut
+    output_df.loc[j, 'col_max_af_mut']=col_freq_per_mut.max()
+    output_df.loc[j, 'col_max_af_mut_label']=query_df['label'][np.argmax(col_count_per_mut)]
+    # DELETE THOSE TEMPORARAY df BEFORE MOVING INTO THE NEXT ITERATION TO MINIMISE ERROR
+    del exon; del snp_af_df; del query_df; 
+    del gam_query_df; del gam_count_query_df; del gam_count_per_mut; 
+    del gam_nobs_query_df; del gam_nobs_per_mut; del gam_freq_per_mut;
+    del col_query_df; del col_count_query_df; del col_count_per_mut; 
+    del col_nobs_query_df; del col_nobs_per_mut; del col_freq_per_mut;
+
+
+output_df.to_csv(f"output_{index_2}.csv", index=False)
